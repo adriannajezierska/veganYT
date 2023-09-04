@@ -1,0 +1,42 @@
+import pandas as pd
+from googleapiclient.discovery import build
+
+# Set up YouTube API key
+myKey = "YOUR_API_KEY_HERE"
+youtube = build('youtube', 'v3', developerKey=myKey)
+
+def search_by_keyword():
+    data = []  # Create a list to store data
+    
+    results = youtube.search().list(part='id,snippet', q='vegan', maxResults=100).execute()
+    for item in results['items']:
+        if 'videoId' in item['id']:
+            video_id = item['id']['videoId']
+            video_info = get_video_info(video_id)
+            
+            title = item['snippet']['title']
+            channel_name = video_info['snippet']['channelTitle']
+            subscribers = get_channel_subscribers(video_info['snippet']['channelId'])
+            view_count = video_info['statistics']['viewCount']
+            comment_count = video_info['statistics']['commentCount']
+            
+            data.append({'Video ID': video_id, 'Title': title, 'Channel Name': channel_name,
+                         'Subscribers': subscribers, 'View Count': view_count, 'Comment Count': comment_count})
+    
+    # Create a DataFrame from the data
+    df = pd.DataFrame(data)
+    
+    # Save the DataFrame to an Excel file
+    excel_file = 'youtube_results.xlsx'
+    df.to_excel(excel_file, index=False)
+    print(f'Data exported to {excel_file}')
+
+def get_video_info(video_id):
+    video_info = youtube.videos().list(part='snippet,statistics', id=video_id).execute()
+    return video_info['items'][0]
+
+def get_channel_subscribers(channel_id):
+    channel_info = youtube.channels().list(part='statistics', id=channel_id).execute()
+    return channel_info['items'][0]['statistics']['subscriberCount']
+
+search_by_keyword()
