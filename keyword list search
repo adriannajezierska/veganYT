@@ -1,0 +1,85 @@
+import argparse
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+DEVELOPER_KEY = 'AIzaSyCvB-jOQhP1fIcBXOkP_NmNLJgvm-syfX0'
+YOUTUBE_API_SERVICE_NAME = 'youtube'
+YOUTUBE_API_VERSION = 'v3'
+
+def get_channel_subscriber_count(channel_id):
+    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
+        developerKey=DEVELOPER_KEY)
+
+    channel_response = youtube.channels().list(
+        part='statistics',
+        id=channel_id
+    ).execute()
+
+    if 'items' in channel_response:
+        channel = channel_response['items'][0]
+        return channel['statistics'].get('subscriberCount', 0)
+    else:
+        return 0
+
+def youtube_search(query_term, max_results):
+    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
+        developerKey=DEVELOPER_KEY)
+    video_data = []  # Initialize a list to store video data
+    nextPageToken = None  # Initialize nextPageToken to None
+
+    while True:
+        search_response = youtube.search().list(
+            q=query_term,
+            part='id',
+            type='video',
+            relevanceLanguage='en',
+            maxResults=max_results,
+            pageToken=nextPageToken
+        ).execute()
+
+        video_ids = []
+        for search_result in search_response.get('items', []):
+            video_ids.append(search_result['id']['videoId'])
+
+        video_details_response = youtube.videos().list(
+            part='snippet,statistics',
+            id=','.join(video_ids)
+        ).execute()
+
+        for video in video_details_response.get('items', []):
+            channel_id = video['snippet']['channelId']
+            subscribers_count = get_channel_subscriber_count(channel_id)
+
+            video_data.append({
+                'title': video['snippet']['title'],
+                'videoId': video['id'],
+                'channelName': video['snippet']['channelTitle'],
+                'subscribersCount': subscribers_count,
+                'commentCount': video['statistics'].get('commentCount', 0)
+            })
+
+        nextPageToken = search_response.get('nextPageToken')
+
+        if not nextPageToken:
+            break
+
+    return video_data
+
+
+if __name__ == '__main__':
+    url_prefix = 'https://www.youtube.com/watch?v='
+    query_terms = 'vegan'  # Removed unnecessary double quotes
+    max_results = 50
+
+    try:
+        video_data = youtube_search(query_terms, max_results)
+
+        with open('output2.txt', 'w', encoding='utf-8') as f:  # Specify UTF-8 encoding
+            for video in video_data:
+                f.write(f'Title: {video["title"]}\n')
+                f.write(f'Video URL: {url_prefix + video["videoId"]}\n')
+                f.write(f'Channel Name: {video["channelName"]}\n')
+                f.write(f'Subscribers Count: {video["subscribersCount"]}\n')
+                f.write(f'Comments Count: {video["commentCount"]}\n\n')
+    except HttpError as e:
+        print('An HTTP error %d occurred:\n%s' % (e.resp.status, e.content))
